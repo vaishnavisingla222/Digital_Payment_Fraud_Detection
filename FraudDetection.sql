@@ -270,7 +270,7 @@ BEGIN
         txn_seq.NEXTVAL,
         s_acc,
         r_acc,
-        p_id,  
+        p_id,   
         amt,
         'SUCCESS',
         SYSDATE
@@ -279,7 +279,6 @@ BEGIN
     COMMIT;
 END;
 /
-
 -----------------------------
 -- 7. FUNCTION (GET BALANCE)
 -----------------------------
@@ -306,27 +305,35 @@ SELECT * FROM fraud_transactions;
 -- 9. TEST DATA (TRANSACTIONS)
 -----------------------------
 BEGIN
-  transfer_money(101,102,50000); -- insert transaction but not a fraud
+  transfer_money(101,102,50000, 201); -- insert transaction but not a fraud
 END;
 /
 
 BEGIN
-  transfer_money(105,106,200000); -- transaction + fraud in UPI
+  transfer_money(105,106,150000,201); -- UPI Fraud (>1 Lakh)
 END;
 /
 
 BEGIN
-  transfer_money(105,106,150000); -- should trigger fraud in UPI
+  transfer_money(105,106,1200000,205); --CARD Fraud (>10 Lakh)
 END;
 /
 
 BEGIN
-  transfer_money(104,105,20000); -- Wallet Fraud (>10K)
+  transfer_money(104,105,20000,202); --WALLET Fraud (>10K)
 END;
 /
 
 BEGIN
-  transfer_money(110,111,1900000); --Net Banking High Amount
+  transfer_money(112,113,5000,201); -- Blocked Account
+END;
+/
+
+SELECT account_id, balance 
+FROM account 
+WHERE balance>1800000;
+BEGIN
+  transfer_money(110,111,1900000,203);
 END;
 /
 
