@@ -2,7 +2,7 @@
 -- DIGITAL PAYMENT FRAUD DETECTION SYSTEM
 --------------------------------------------------
 
--- FULL DATABASE CLEANUP SCRIPT
+-- 1. Full Database Cleanup for running from start
 
 SET DEFINE OFF;
 BEGIN
@@ -24,7 +24,7 @@ END;
 /
 
    
--- CREATE TABLES
+-- 1. Create Tables
    
 CREATE TABLE users (
     user_id NUMBER PRIMARY KEY,
@@ -72,14 +72,14 @@ CREATE TABLE fraud_log (
 );
 
 
--- SEQUENCES
+-- 2. Sequences
 CREATE SEQUENCE txn_seq START WITH 1;
 CREATE SEQUENCE fraud_seq START WITH 1;
 
 
--- INSERT DATA (AUTO)
+-- 3. Insert Data in the Table
 
--- USERS
+-- Users
 BEGIN
   FOR i IN 1..150 LOOP
     INSERT INTO users VALUES (
@@ -92,7 +92,7 @@ BEGIN
 END;
 /
 
--- ACCOUNT
+-- Account
 BEGIN
   FOR i IN 1..150 LOOP
     INSERT INTO account VALUES (
@@ -115,7 +115,7 @@ BEGIN
 END;
 /
 
--- PAYMENT METHOD
+-- Payment Mathod
 BEGIN
   FOR i IN 1..150 LOOP
     INSERT INTO payment_method VALUES (
@@ -146,7 +146,7 @@ SELECT * FROM TRANSACTIONS;
 SELECT * FROM FRAUD_LOG;
 
 
--- TRIGGER (FRAUD DETECTION)
+-- 4. Triggers to detect Fraud
 
 CREATE OR REPLACE TRIGGER detect_fraud
 AFTER INSERT ON transactions
@@ -166,7 +166,7 @@ BEGIN
     FROM payment_method
     WHERE payment_id = :NEW.payment_id;
  
-    -- PAYMENT METHOD BASED FRAUD
+    -- Fraud based on different Payment Methods
 
     IF (v_method = 'UPI' AND :NEW.amount > 100000) THEN
         INSERT INTO fraud_log (fraud_id, txn_id, reason, fraud_time)
@@ -192,14 +192,14 @@ BEGIN
         'Wallet > 10K', SYSDATE);
     END IF;
 
-    -- BLOCKED ACCOUNT
+    -- Blocked Account
     IF v_acc_status = 'BLOCKED' THEN
         INSERT INTO fraud_log (fraud_id, txn_id, reason, fraud_time)
         VALUES (fraud_seq.NEXTVAL, :NEW.txn_id,
         'Blocked account used', SYSDATE);
     END IF;
 
-    -- INACTIVE PAYMENT METHOD
+    -- Inactiva account
     IF v_payment_status = 'INACTIVE' THEN
         INSERT INTO fraud_log (fraud_id, txn_id, reason, fraud_time)
         VALUES (fraud_seq.NEXTVAL, :NEW.txn_id,
@@ -209,7 +209,7 @@ BEGIN
 END;
 /
    
--- PROCEDURE (TRANSFER)
+-- 5. Procedure - Transfer
 CREATE OR REPLACE PROCEDURE transfer_money(
     s_acc NUMBER,
     r_acc NUMBER,
@@ -254,7 +254,7 @@ BEGIN
 END;
 /
 
---  FUNCTION (GET BALANCE)
+--  6. Function - Get Balance
 CREATE OR REPLACE FUNCTION get_balance(acc NUMBER)
 RETURN NUMBER
 IS
@@ -266,7 +266,7 @@ END;
 /
 
 
---  VIEW
+--  7. View - Fraud + Transaction
 CREATE VIEW fraud_transactions AS
 SELECT t.txn_id, t.amount, f.reason
 FROM transactions t
@@ -275,7 +275,7 @@ JOIN fraud_log f ON t.txn_id = f.txn_id;
 SELECT * FROM fraud_transactions;
 
 
--- TRANSACTIONS
+-- 8. Transactions
 BEGIN
   transfer_money(101,102,50000,201); -- insert transaction but not a fraud
 END;
@@ -316,32 +316,23 @@ SELECT * FROM FRAUD_LOG;
 
 SELECT * FROM fraud_transactions;
 
---------------------------------------------------
---QUERIES
---------------------------------------------------
 
---------------------------------------------------
--- 1. Total Successful Transaction Amount
---------------------------------------------------
+--9. QUERIES
+
+-- Total Successful Transaction Amount
 SELECT SUM(amount) AS total_success_amount
 FROM transactions
 WHERE txn_status = 'SUCCESS';
 
---------------------------------------------------
--- 2. Average Transaction Amount
---------------------------------------------------
+-- Average Transaction Amount
 SELECT AVG(amount) AS avg_amount FROM transactions;
 
---------------------------------------------------
--- 3. Top 5 Highest Transactions
---------------------------------------------------
+-- Top 5 Highest Transactions
 SELECT * FROM transactions
 ORDER BY amount DESC
 FETCH FIRST 5 ROWS ONLY;
 
---------------------------------------------------
--- 4. Users with Highest Balance
---------------------------------------------------
+-- Users with Highest Balance
 SELECT u.name, a.balance
 FROM users u
 JOIN account a ON u.user_id = a.user_id
