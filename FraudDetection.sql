@@ -1,31 +1,17 @@
 --------------------------------------------------
--- DIGITAL PAYMENT FRAUD DETECTION SYSTEM (SIMPLE)
+-- DIGITAL PAYMENT FRAUD DETECTION SYSTEM
 --------------------------------------------------
 
---------------------------------------------------
--- 1. FULL DATABASE CLEANUP SCRIPT
---------------------------------------------------
+-- FULL DATABASE CLEANUP SCRIPT
 
 SET DEFINE OFF;
-
 BEGIN
-   -- Drop Trigger
    EXECUTE IMMEDIATE 'DROP TRIGGER detect_fraud';
-
-   -- Drop View
    EXECUTE IMMEDIATE 'DROP VIEW fraud_transactions';
-
-   -- Drop Procedure
    EXECUTE IMMEDIATE 'DROP PROCEDURE transfer_money';
-
-   -- Drop Function
    EXECUTE IMMEDIATE 'DROP FUNCTION get_balance';
-
-   -- Drop Sequences
    EXECUTE IMMEDIATE 'DROP SEQUENCE txn_seq';
    EXECUTE IMMEDIATE 'DROP SEQUENCE fraud_seq';
-
-   -- Drop Tables (child → parent)
    EXECUTE IMMEDIATE 'DROP TABLE fraud_log CASCADE CONSTRAINTS';
    EXECUTE IMMEDIATE 'DROP TABLE transactions CASCADE CONSTRAINTS';
    EXECUTE IMMEDIATE 'DROP TABLE payment_method CASCADE CONSTRAINTS';
@@ -37,10 +23,9 @@ EXCEPTION
 END;
 /
 
------------------------------
--- 2. CREATE TABLES
------------------------------
-
+   
+-- CREATE TABLES
+   
 CREATE TABLE users (
     user_id NUMBER PRIMARY KEY,
     name VARCHAR2(50),
@@ -86,15 +71,13 @@ CREATE TABLE fraud_log (
     FOREIGN KEY (txn_id) REFERENCES transactions(txn_id)
 );
 
------------------------------
--- 3. SEQUENCES
------------------------------
+
+-- SEQUENCES
 CREATE SEQUENCE txn_seq START WITH 1;
 CREATE SEQUENCE fraud_seq START WITH 1;
 
------------------------------
--- 4. INSERT DATA (AUTO)
------------------------------
+
+-- INSERT DATA (AUTO)
 
 -- USERS
 BEGIN
@@ -108,7 +91,6 @@ BEGIN
   END LOOP;
 END;
 /
-
 
 -- ACCOUNT
 BEGIN
@@ -162,9 +144,10 @@ SELECT * FROM ACCOUNT;
 SELECT * FROM PAYMENT_METHOD;
 SELECT * FROM TRANSACTIONS;
 SELECT * FROM FRAUD_LOG;
------------------------------
--- 5. TRIGGER (FRAUD DETECTION)
------------------------------
+
+
+-- TRIGGER (FRAUD DETECTION)
+
 CREATE OR REPLACE TRIGGER detect_fraud
 AFTER INSERT ON transactions
 FOR EACH ROW
@@ -182,10 +165,8 @@ BEGIN
     INTO v_method, v_payment_status
     FROM payment_method
     WHERE payment_id = :NEW.payment_id;
-
-    --------------------------------------------------
+ 
     -- PAYMENT METHOD BASED FRAUD
-    --------------------------------------------------
 
     IF (v_method = 'UPI' AND :NEW.amount > 100000) THEN
         INSERT INTO fraud_log (fraud_id, txn_id, reason, fraud_time)
@@ -211,20 +192,14 @@ BEGIN
         'Wallet > 10K', SYSDATE);
     END IF;
 
-    --------------------------------------------------
     -- BLOCKED ACCOUNT
-    --------------------------------------------------
-
     IF v_acc_status = 'BLOCKED' THEN
         INSERT INTO fraud_log (fraud_id, txn_id, reason, fraud_time)
         VALUES (fraud_seq.NEXTVAL, :NEW.txn_id,
         'Blocked account used', SYSDATE);
     END IF;
 
-    --------------------------------------------------
     -- INACTIVE PAYMENT METHOD
-    --------------------------------------------------
-
     IF v_payment_status = 'INACTIVE' THEN
         INSERT INTO fraud_log (fraud_id, txn_id, reason, fraud_time)
         VALUES (fraud_seq.NEXTVAL, :NEW.txn_id,
@@ -233,9 +208,8 @@ BEGIN
 
 END;
 /
------------------------------
--- 6. PROCEDURE (TRANSFER)
------------------------------
+   
+-- PROCEDURE (TRANSFER)
 CREATE OR REPLACE PROCEDURE transfer_money(
     s_acc NUMBER,
     r_acc NUMBER,
@@ -279,9 +253,8 @@ BEGIN
     COMMIT;
 END;
 /
------------------------------
--- 7. FUNCTION (GET BALANCE)
------------------------------
+
+--  FUNCTION (GET BALANCE)
 CREATE OR REPLACE FUNCTION get_balance(acc NUMBER)
 RETURN NUMBER
 IS
@@ -292,18 +265,17 @@ BEGIN
 END;
 /
 
------------------------------
--- 8. VIEW
------------------------------
+
+--  VIEW
 CREATE VIEW fraud_transactions AS
 SELECT t.txn_id, t.amount, f.reason
 FROM transactions t
 JOIN fraud_log f ON t.txn_id = f.txn_id;
 
 SELECT * FROM fraud_transactions;
------------------------------
--- 9. TEST DATA (TRANSACTIONS)
------------------------------
+
+
+-- TRANSACTIONS
 BEGIN
   transfer_money(101,102,50000,201); -- insert transaction but not a fraud
 END;
@@ -343,6 +315,7 @@ SELECT * FROM TRANSACTIONS;
 SELECT * FROM FRAUD_LOG;
 
 SELECT * FROM fraud_transactions;
+
 --------------------------------------------------
 --QUERIES
 --------------------------------------------------
