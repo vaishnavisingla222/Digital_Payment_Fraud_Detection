@@ -305,22 +305,17 @@ SELECT * FROM fraud_transactions;
 -- 9. TEST DATA (TRANSACTIONS)
 -----------------------------
 BEGIN
-  transfer_money(101,102,50000, 201); -- insert transaction but not a fraud
+  transfer_money(101,102,50000,201); -- insert transaction but not a fraud
 END;
 /
 
 BEGIN
-  transfer_money(105,106,150000,201); -- UPI Fraud (>1 Lakh)
+  transfer_money(105,106,150000,201); -- UPI Fraud
 END;
 /
 
 BEGIN
-  transfer_money(105,106,1200000,205); --CARD Fraud (>10 Lakh)
-END;
-/
-
-BEGIN
-  transfer_money(104,105,20000,202); --WALLET Fraud (>10K)
+  transfer_money(105,106,1200000,205); -- Card Fraud
 END;
 /
 
@@ -329,11 +324,18 @@ BEGIN
 END;
 /
 
-SELECT account_id, balance 
-FROM account 
-WHERE balance>1800000;
 BEGIN
-  transfer_money(110,111,1900000,203);
+  transfer_money(104,105,20000,202); -- Wallet fraud
+END;
+/
+
+BEGIN
+  transfer_money(115,111,1900000,203); -- Net Banking Fraud 
+END;
+/
+
+BEGIN
+  transfer_money(105,106,5000,264); -- Inactive account
 END;
 /
 
