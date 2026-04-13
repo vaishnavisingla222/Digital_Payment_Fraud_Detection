@@ -338,18 +338,14 @@ FROM users u
 JOIN account a ON u.user_id = a.user_id
 WHERE a.balance = (SELECT MAX(balance) FROM account);
 
---------------------------------------------------
--- 5. Total Transactions per User
---------------------------------------------------
+-- Total Transactions per User
 SELECT u.name, COUNT(t.txn_id) AS total_txn
 FROM users u
 JOIN account a ON u.user_id = a.user_id
 LEFT JOIN transactions t ON a.account_id = t.sender_account_id
 GROUP BY u.name;
 
---------------------------------------------------
--- 6. Users with No Transactions
---------------------------------------------------
+-- Users with No Transactions
 SELECT u.name
 FROM users u
 WHERE NOT EXISTS (
@@ -358,16 +354,12 @@ WHERE NOT EXISTS (
     WHERE a.user_id = u.user_id
 );
 
---------------------------------------------------
--- 7. Fraud Transactions with Details
---------------------------------------------------
+-- Fraud Transactions with Details
 SELECT t.txn_id, t.amount, f.reason
 FROM transactions t
 JOIN fraud_log f ON t.txn_id = f.txn_id;
 
---------------------------------------------------
--- 8. Fraud Count per User
---------------------------------------------------
+-- Fraud Count per User
 SELECT u.name, COUNT(f.fraud_id) AS fraud_count
 FROM users u
 JOIN account a ON u.user_id = a.user_id
@@ -375,18 +367,14 @@ JOIN transactions t ON a.account_id = t.sender_account_id
 JOIN fraud_log f ON t.txn_id = f.txn_id
 GROUP BY u.name;
 
---------------------------------------------------
--- 9. Most Frequent Fraud Reason
---------------------------------------------------
+-- Most Frequent Fraud Reason
 SELECT reason
 FROM fraud_log
 GROUP BY reason
 ORDER BY COUNT(*) DESC
 FETCH FIRST 1 ROW ONLY;
 
---------------------------------------------------
--- 10. High Risk Users (>2 frauds)
---------------------------------------------------
+-- High Risk Users (>2 frauds)
 SELECT u.name, COUNT(*) AS frauds
 FROM users u
 JOIN account a ON u.user_id = a.user_id
@@ -395,9 +383,7 @@ JOIN fraud_log f ON t.txn_id = f.txn_id
 GROUP BY u.name
 HAVING COUNT(*) > 2;
 
---------------------------------------------------
--- 11. Sender & Receiver Details
---------------------------------------------------
+-- Sender & Receiver Details
 SELECT t.txn_id, u1.name AS sender, u2.name AS receiver, t.amount
 FROM transactions t
 JOIN account a1 ON t.sender_account_id = a1.account_id
@@ -405,21 +391,15 @@ JOIN users u1 ON a1.user_id = u1.user_id
 JOIN account a2 ON t.receiver_account_id = a2.account_id
 JOIN users u2 ON a2.user_id = u2.user_id;
 
---------------------------------------------------
--- 12. Transactions Above Average
---------------------------------------------------
+-- Transactions Above Average
 SELECT * FROM transactions
 WHERE amount > (SELECT AVG(amount) FROM transactions);
 
---------------------------------------------------
--- 13. Accounts Below Average Balance
---------------------------------------------------
+-- Accounts Below Average Balance
 SELECT * FROM account
 WHERE balance < (SELECT AVG(balance) FROM account);
 
---------------------------------------------------
--- 14. Daily Transaction Count
---------------------------------------------------
+-- Daily Transaction Count
 SELECT TRUNC(txn_time), COUNT(*)
 FROM transactions
 GROUP BY TRUNC(txn_time);
@@ -603,16 +583,12 @@ SELECT Account_status, COUNT(*)
 FROM account
 GROUP BY Account_status;
 
---------------------------------------------------
--- 40. Payment Method Usage
---------------------------------------------------
+-- Payment Method Usage
 SELECT payment_id, COUNT(*)
 FROM transactions
 GROUP BY payment_id;
 
---------------------------------------------------
--- 41. Most Used Payment Method
---------------------------------------------------
+-- Most Used Payment Method
 SELECT *
 FROM (
   SELECT pm.method_type, COUNT(*) cnt
@@ -623,71 +599,54 @@ FROM (
 )
 WHERE ROWNUM = 1;
 
---------------------------------------------------
--- 42. Transactions per Day Sorted
---------------------------------------------------
+-- Transactions per Day Sorted
 SELECT TRUNC(txn_time), COUNT(*)
 FROM transactions
 GROUP BY TRUNC(txn_time)
 ORDER BY TRUNC(txn_time);
 
---------------------------------------------------
--- 43. Recent Fraud (1 Day)
---------------------------------------------------
+--  Recent Fraud (1 Day)
 SELECT *
 FROM fraud_log
 WHERE fraud_time >= SYSDATE - 1;
 
---------------------------------------------------
--- 44. Accounts Never Used
---------------------------------------------------
+-- Accounts Never Used 
 SELECT account_id
 FROM account
 WHERE account_id NOT IN (
     SELECT sender_account_id FROM transactions
 );
 
---------------------------------------------------
--- 45. Avg Balance of Fraud Users
---------------------------------------------------
+--  Avg Balance of Fraud Users
 SELECT AVG(a.balance)
 FROM account a
 JOIN transactions t ON a.account_id = t.sender_account_id
 JOIN fraud_log f ON t.txn_id = f.txn_id;
 
---------------------------------------------------
--- 46. Transactions per Payment Status
---------------------------------------------------
+-- Transactions per Payment Status
+
 SELECT pm.Payment_status, COUNT(*)
 FROM transactions t
 JOIN payment_method pm ON t.payment_id = pm.payment_id
 GROUP BY pm.Payment_status;
 
---------------------------------------------------
--- 47. Repeated Sender-Receiver Pairs
---------------------------------------------------
+-- Repeated Sender-Receiver Pairs
 SELECT sender_account_id, receiver_account_id, COUNT(*)
 FROM transactions
 GROUP BY sender_account_id, receiver_account_id
 HAVING COUNT(*) > 1;
 
---------------------------------------------------
--- 48. Largest Transaction per User
---------------------------------------------------
+-- Largest Transaction per User
 SELECT sender_account_id, MAX(amount)
 FROM transactions
 GROUP BY sender_account_id;
 
---------------------------------------------------
--- 49. Fraud Reason Count
---------------------------------------------------
+-- Fraud Reason Count
 SELECT reason, COUNT(*)
 FROM fraud_log
 GROUP BY reason;
 
---------------------------------------------------
--- 50. Transactions with Account Status
---------------------------------------------------
+-- Transactions with Account Status
 SELECT t.txn_id, t.amount, a.Account_status
 FROM transactions t
 JOIN account a ON t.sender_account_id = a.account_id;
