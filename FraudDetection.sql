@@ -404,65 +404,45 @@ SELECT TRUNC(txn_time), COUNT(*)
 FROM transactions
 GROUP BY TRUNC(txn_time);
 
---------------------------------------------------
--- 15. Transactions by Payment Method
---------------------------------------------------
+-- Transactions by Payment Method
 SELECT pm.method_type, COUNT(*)
 FROM transactions t
 JOIN payment_method pm ON t.payment_id = pm.payment_id
 GROUP BY pm.method_type;
 
---------------------------------------------------
--- 16. Total Amount per Payment Method
---------------------------------------------------
+-- Total Amount per Payment Method
 SELECT pm.method_type, SUM(t.amount)
 FROM transactions t
 JOIN payment_method pm ON t.payment_id = pm.payment_id
 GROUP BY pm.method_type;
 
---------------------------------------------------
--- 17. Failed Transactions
---------------------------------------------------
+-- Failed Transactions
 SELECT * FROM transactions WHERE txn_status = 'FAILED';
 
---------------------------------------------------
--- 18. Pending Transactions
---------------------------------------------------
+-- Pending Transactions
 SELECT * FROM transactions WHERE txn_status = 'PENDING';
 
---------------------------------------------------
--- 19. Blocked Accounts
---------------------------------------------------
+--  Blocked Accounts
 SELECT * FROM account WHERE Account_status = 'BLOCKED';
 
---------------------------------------------------
--- 20. Inactive Payment Methods
---------------------------------------------------
+-- Inactive Payment Methods
 SELECT * FROM payment_method WHERE Payment_status = 'INACTIVE';
 
---------------------------------------------------
--- 21. Transactions in Last 7 Days
---------------------------------------------------
+-- Transactions in Last 7 Days
 SELECT * FROM transactions
 WHERE txn_time >= SYSDATE - 7;
 
---------------------------------------------------
--- 22. Rank Transactions by Amount
---------------------------------------------------
+-- Rank Transactions by Amount
 SELECT txn_id, amount,
 RANK() OVER (ORDER BY amount DESC) AS rank_amt
 FROM transactions;
 
---------------------------------------------------
--- 23. Running Total of Transactions
---------------------------------------------------
+-- Running Total of Transactions
 SELECT txn_id, amount,
 SUM(amount) OVER (ORDER BY txn_time) AS running_total
 FROM transactions;
 
---------------------------------------------------
--- 24. Top 3 Users by Transaction Amount
---------------------------------------------------
+-- Top 3 Users by Transaction Amount
 SELECT * FROM (
     SELECT u.name, SUM(t.amount) total_amt
     FROM users u
@@ -473,112 +453,82 @@ SELECT * FROM (
 )
 WHERE ROWNUM <= 3;
 
---------------------------------------------------
--- 25. Fraud Transactions (View)
---------------------------------------------------
+-- Fraud Transactions View
 SELECT * FROM fraud_transactions;
 
---------------------------------------------------
--- 26. Transactions Between Range
---------------------------------------------------
+-- Transactions Between Range
 SELECT * FROM transactions
 WHERE amount BETWEEN 10000 AND 50000;
 
---------------------------------------------------
--- 27. Users Using Multiple Payment Methods
---------------------------------------------------
+-- Users Using Multiple Payment Methods
 SELECT user_id, COUNT(DISTINCT method_type)
 FROM payment_method
 GROUP BY user_id
 HAVING COUNT(DISTINCT method_type) > 1;
 
---------------------------------------------------
--- 28. Accounts with High Activity (>10 transactions)
---------------------------------------------------
+-- Accounts with High Activity (>10 transactions)
 SELECT sender_account_id, COUNT(*)
 FROM transactions
 GROUP BY sender_account_id
 HAVING COUNT(*) > 10;
 
---------------------------------------------------
--- 29. Latest Transaction per User
---------------------------------------------------
+-- Latest Transaction per User
 SELECT * FROM (
     SELECT t.*, ROW_NUMBER() OVER (PARTITION BY sender_account_id ORDER BY txn_time DESC) rn
     FROM transactions t
 )
 WHERE rn = 1;
 
---------------------------------------------------
--- 30. Suspicious Pattern (High Amount + Failed)
---------------------------------------------------
+-- Suspicious Pattern (High Amount + Failed)
 SELECT * FROM transactions
 WHERE amount > 50000 AND txn_status = 'FAILED';
 
---------------------------------------------------
--- 31. Total Fraud Amount
---------------------------------------------------
+-- Total Fraud Amount
 SELECT SUM(t.amount)
 FROM transactions t
 JOIN fraud_log f ON t.txn_id = f.txn_id;
 
---------------------------------------------------
--- 32. Fraud Percentage
---------------------------------------------------
+--  Fraud Percentage
 SELECT 
   (COUNT(f.txn_id) * 100.0 / COUNT(t.txn_id))
 FROM transactions t
 LEFT JOIN fraud_log f ON t.txn_id = f.txn_id;
 
---------------------------------------------------
--- 33. Fraud by Payment Method
---------------------------------------------------
+-- Fraud by Payment Method
 SELECT pm.method_type, COUNT(*)
 FROM fraud_log f
 JOIN transactions t ON f.txn_id = t.txn_id
 JOIN payment_method pm ON t.payment_id = pm.payment_id
 GROUP BY pm.method_type;
 
---------------------------------------------------
--- 34. Highest Fraud Transaction
---------------------------------------------------
+-- Highest Fraud Transaction
 SELECT *
 FROM transactions
 WHERE txn_id IN (SELECT txn_id FROM fraud_log)
 ORDER BY amount DESC
 FETCH FIRST 1 ROW ONLY;
 
---------------------------------------------------
--- 35. Fraud Senders
---------------------------------------------------
+-- Fraud Senders
 SELECT DISTINCT u.name
 FROM users u
 JOIN account a ON u.user_id = a.user_id
 JOIN transactions t ON a.account_id = t.sender_account_id
 JOIN fraud_log f ON t.txn_id = f.txn_id;
 
---------------------------------------------------
--- 36. Fraud Receivers
---------------------------------------------------
+--  Fraud Receivers
 SELECT DISTINCT u.name
 FROM users u
 JOIN account a ON u.user_id = a.user_id
 JOIN transactions t ON a.account_id = t.receiver_account_id
 JOIN fraud_log f ON t.txn_id = f.txn_id;
 
---------------------------------------------------
--- 37. Total Bank Balance
---------------------------------------------------
+-- Total Bank Balance
 SELECT SUM(balance) FROM account;
 
---------------------------------------------------
--- 38. Accounts with Balance > 1 Lakh
---------------------------------------------------
+-- Accounts with Balance > 1 Lakh
 SELECT * FROM account WHERE balance > 100000;
 
---------------------------------------------------
--- 39. Active vs Blocked Accounts
---------------------------------------------------
+--  Active vs Blocked Accounts
 SELECT Account_status, COUNT(*)
 FROM account
 GROUP BY Account_status;
