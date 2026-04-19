@@ -1,6 +1,6 @@
 # 💳 Digital Payment Fraud Detection System (SQL-Based)
 
-This project is a database-driven fraud detection system designed to simulate real-world digital payment environments. It focuses on identifying suspicious transactions using SQL triggers, procedures, and analytical queries.
+This project is a database-driven fraud detection system designed to simulate real-world digital payment environments. It focuses on identifying suspicious transactions using SQL triggers, cursors, procedures, and analytical queries.
 
 ## 🚀 Features
 
@@ -14,7 +14,8 @@ This project is a database-driven fraud detection system designed to simulate re
 - Detects fraud based on:
   - High transaction amount thresholds
   - Blocked accounts
-  - Inactive payment methods  
+  - Inactive payment methods
+- Block account based on number of frauds
 - Maintains a separate fraud log for audit and investigation  
 - Includes 50+ analytical SQL queries for insights and reporting  
 
@@ -41,12 +42,13 @@ Fraud is detected automatically when:
 - **Tables**: users, account, payment_method, transactions, fraud_log  
 - **Trigger**: detect_fraud (automatically logs suspicious transactions)  
 - **Procedure**: transfer_money (handles transaction flow)  
-- **Function**: get_balance (retrieves account balance)  
+- **Function**: get_balance (retrieves account balance)
+- **Cursors**: block_fraud_accounts (block account with more tha a specific ammount of frauds)
 - **View**: fraud_transactions (quick fraud reporting)
 
 ## 📈 Insights & Analysis
 
-The project includes 50 SQL queries to analyze:
+The project includes ~50 SQL queries to analyze:
 - Transaction trends  
 - Fraud patterns  
 - High-risk users  
