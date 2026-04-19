@@ -44,7 +44,7 @@ Fraud is detected automatically when:
 - **Procedure**: transfer_money (handles transaction flow)  
 - **Function**: get_balance (retrieves account balance)
 - **Cursors**: block_fraud_accounts (block account with more tha a specific ammount of frauds)
-- **View**: fraud_transactions (quick fraud reporting)
+- **View**: fraud_transactions (quick fraud reporting), blocked_accounts (all the blocked accounts)
 
 ## 📈 Insights & Analysis
 
