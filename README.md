@@ -16,16 +16,8 @@ This project is a database-driven fraud detection system designed to simulate re
   - Blocked accounts
   - Inactive payment methods
 - Block account based on number of frauds
-- Maintains a separate fraud log for audit and investigation  
+- Maintains a separate fraud log for audit and investigation
 - Includes 50+ analytical SQL queries for insights and reporting  
-
-## 🧠 Key Concepts Used
-
-- SQL (Oracle)
-- Joins, Subqueries, Aggregations
-- Triggers (Event-driven fraud detection)
-- Stored Procedures & Functions
-- Views for simplified reporting
 
 ## 📊 Fraud Detection Logic
 
