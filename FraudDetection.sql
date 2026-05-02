@@ -379,6 +379,16 @@ END;
 
 -- 11. QUERY SET 
 
+-- Account blocked due to cursor
+SELECT a.account_id, u.name, COUNT(f.txn_id) AS fraud_count
+FROM account a
+JOIN users u ON a.user_id = u.user_id
+JOIN transactions t ON a.account_id = t.sender_account_id
+JOIN fraud_log f ON t.txn_id = f.txn_id
+WHERE a.account_status = 'BLOCKED'
+GROUP BY a.account_id, u.name
+HAVING COUNT(f.txn_id) > 1;
+
 -- Rank users based on total transaction amount (Top spenders)
 SELECT u.name, SUM(t.amount) AS total_amount,
 DENSE_RANK() OVER (ORDER BY SUM(t.amount) DESC) AS rank
@@ -796,16 +806,6 @@ FROM transactions t
 LEFT JOIN fraud_log f ON t.txn_id = f.txn_id
 GROUP BY sender_account_id
 ORDER BY risk_score DESC;
-
--- Account blocked due to cursor
-SELECT a.account_id, u.name, COUNT(f.txn_id) AS fraud_count
-FROM account a
-JOIN users u ON a.user_id = u.user_id
-JOIN transactions t ON a.account_id = t.sender_account_id
-JOIN fraud_log f ON t.txn_id = f.txn_id
-WHERE a.account_status = 'BLOCKED'
-GROUP BY a.account_id, u.name
-HAVING COUNT(f.txn_id) > 1;
 
 --------------------------------------------------
 -- END OF PROJECT 
