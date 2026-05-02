@@ -29,8 +29,7 @@ Fraud is automatically detected when:
 * Wallet transactions exceed ₹10,000
 * Card transactions exceed ₹10,00,000
 * Net banking transactions exceed ₹18,00,000
-* Transactions involve blocked accounts
-* Payment methods are inactive
+* Transactions involve blocked accounts or payment methods which are inactive
 
 All suspicious transactions are logged in the **fraud_log** table using triggers.
 
