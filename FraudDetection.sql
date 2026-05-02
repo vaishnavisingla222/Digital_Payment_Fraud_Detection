@@ -1,24 +1,32 @@
 --------------------------------------------------
--- DIGITAL PAYMENT FRAUD DETECTION SYSTEM
+-- DIGITAL PAYMENT FRAUD DETECTION SYSTEM (SIMPLE)
 --------------------------------------------------
 
--- 1. Removal of all the Objects for Fresh run
+--------------------------------------------------
+-- 1. FULL DATABASE CLEANUP SCRIPT
+--------------------------------------------------
 
 SET DEFINE OFF;
+
 BEGIN
    -- Drop Trigger
    EXECUTE IMMEDIATE 'DROP TRIGGER detect_fraud';
+
    -- Drop View
    EXECUTE IMMEDIATE 'DROP VIEW fraud_transactions';
    EXECUTE IMMEDIATE 'DROP VIEW blocked_accounts';
+
    -- Drop Procedure
    EXECUTE IMMEDIATE 'DROP PROCEDURE transfer_money';
    EXECUTE IMMEDIATE 'DROP PROCEDURE block_fraud_accounts';
+
    -- Drop Function
    EXECUTE IMMEDIATE 'DROP FUNCTION get_balance';
+
    -- Drop Sequences
    EXECUTE IMMEDIATE 'DROP SEQUENCE txn_seq';
    EXECUTE IMMEDIATE 'DROP SEQUENCE fraud_seq';
+
    -- Drop Tables (child → parent)
    EXECUTE IMMEDIATE 'DROP TABLE fraud_log CASCADE CONSTRAINTS';
    EXECUTE IMMEDIATE 'DROP TABLE transactions CASCADE CONSTRAINTS';
@@ -31,15 +39,17 @@ EXCEPTION
 END;
 /
 
+-----------------------------
+-- 2. CREATE TABLES
+-----------------------------
 
-   
--- 2. Create Tables
 CREATE TABLE users (
     user_id NUMBER PRIMARY KEY,
     name VARCHAR2(50),
     email VARCHAR2(100),
     mobile VARCHAR2(15)
 );
+
 CREATE TABLE account (
     account_id NUMBER PRIMARY KEY,
     user_id NUMBER,
@@ -47,6 +57,7 @@ CREATE TABLE account (
     Account_status VARCHAR2(20) DEFAULT 'ACTIVE',
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
+
 CREATE TABLE payment_method (
     payment_id NUMBER PRIMARY KEY,
     user_id NUMBER NOT NULL,
@@ -54,6 +65,7 @@ CREATE TABLE payment_method (
     Payment_status VARCHAR2(20),
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
+
 CREATE TABLE transactions (
     txn_id NUMBER PRIMARY KEY,
     sender_account_id NUMBER NOT NULL,
@@ -66,6 +78,7 @@ CREATE TABLE transactions (
     FOREIGN KEY (receiver_account_id) REFERENCES account(account_id),
     FOREIGN KEY (payment_id) REFERENCES payment_method(payment_id)
 );
+
 CREATE TABLE fraud_log (
     fraud_id NUMBER PRIMARY KEY,
     txn_id NUMBER NOT NULL,
@@ -75,13 +88,15 @@ CREATE TABLE fraud_log (
     FOREIGN KEY (txn_id) REFERENCES transactions(txn_id)
 );
 
-
--- 3. Sequences
+-----------------------------
+-- 3. SEQUENCES
+-----------------------------
 CREATE SEQUENCE txn_seq START WITH 1;
 CREATE SEQUENCE fraud_seq START WITH 1;
 
-
--- 4. Insert Data
+-----------------------------
+-- 4. INSERT DATA (AUTO)
+-----------------------------
 
 -- USERS
 BEGIN
@@ -95,6 +110,7 @@ BEGIN
   END LOOP;
 END;
 /
+
 
 -- ACCOUNT
 BEGIN
@@ -148,10 +164,9 @@ SELECT * FROM ACCOUNT;
 SELECT * FROM PAYMENT_METHOD;
 SELECT * FROM TRANSACTIONS;
 SELECT * FROM FRAUD_LOG;
-
-
-
--- 5. Trigger for Detecting Fraud
+-----------------------------
+-- 5. TRIGGER (FRAUD DETECTION)
+-----------------------------
 CREATE OR REPLACE TRIGGER detect_fraud
 AFTER INSERT ON transactions
 FOR EACH ROW
@@ -170,8 +185,10 @@ BEGIN
     FROM payment_method
     WHERE payment_id = :NEW.payment_id;
 
-    
-    -- Payment Method Based Fraud
+    --------------------------------------------------
+    -- PAYMENT METHOD BASED FRAUD
+    --------------------------------------------------
+
     IF (v_method = 'UPI' AND :NEW.amount > 100000) THEN
         INSERT INTO fraud_log (fraud_id, txn_id, reason, fraud_time)
         VALUES (fraud_seq.NEXTVAL, :NEW.txn_id,
@@ -196,14 +213,19 @@ BEGIN
         'Wallet > 10K', SYSDATE);
     END IF;
 
-    -- Transaction from Blocked account
+    --------------------------------------------------
+    -- BLOCKED ACCOUNT
+    --------------------------------------------------
+
     IF v_acc_status = 'BLOCKED' THEN
         INSERT INTO fraud_log (fraud_id, txn_id, reason, fraud_time)
         VALUES (fraud_seq.NEXTVAL, :NEW.txn_id,
         'Blocked account used', SYSDATE);
     END IF;
 
-    -- Transaction from Inactive account
+    --------------------------------------------------
+    -- INACTIVE PAYMENT METHOD
+    --------------------------------------------------
 
     IF v_payment_status = 'INACTIVE' THEN
         INSERT INTO fraud_log (fraud_id, txn_id, reason, fraud_time)
@@ -213,10 +235,9 @@ BEGIN
 
 END;
 /
-
-
-   
--- 6. Procedure for Transfer
+-----------------------------
+-- 6. PROCEDURE (TRANSFER)
+-----------------------------
 CREATE OR REPLACE PROCEDURE transfer_money(
     s_acc NUMBER,
     r_acc NUMBER,
@@ -261,8 +282,9 @@ BEGIN
 END;
 /
 
-
--- 7. Function to Get balance
+-----------------------------
+-- 7. FUNCTIONS (GET BALANCE)
+-----------------------------
 CREATE OR REPLACE FUNCTION get_balance(acc NUMBER)
 RETURN NUMBER
 IS
@@ -273,7 +295,9 @@ BEGIN
 END;
 /
 
--- 8. Cursor to block account based on number of frauds
+-----------------------------
+-- 8. CURSORS(BLOCK ACCOUNT)
+-----------------------------
 CREATE OR REPLACE PROCEDURE block_fraud_accounts
 IS
   CURSOR acc_cur IS
@@ -305,8 +329,9 @@ BEGIN
 END;
 /
 
-
--- 9. View of fraud and block account
+-----------------------------
+-- 9. VIEW
+-----------------------------
 CREATE VIEW fraud_transactions AS
 SELECT t.txn_id, t.amount, f.reason
 FROM transactions t
@@ -321,10 +346,8 @@ WHERE a.account_status = 'BLOCKED';
 
 SELECT * FROM fraud_transactions;
 SELECT * FROM blocked_accounts;
-
-
-
--- 10. Test Transactions
+-----------------------------
+-- 10. TEST DATA (TRANSACTIONS)
 -----------------------------
 BEGIN
   transfer_money(101,102,50000,201); -- insert transaction but not a fraud
@@ -365,25 +388,19 @@ SELECT * FROM TRANSACTIONS;
 SELECT * FROM FRAUD_LOG;
 SELECT * FROM fraud_transactions;
 
+SELECT get_balance(101) FROM dual;
+SELECT get_balance(102) FROM dual;
+
 BEGIN
   block_fraud_accounts;
 END;
 /
 
-
+--------------------------------------------------
 -- 11. QUERY SET 
+--------------------------------------------------
 
--- Account blocked due to cursor
-SELECT a.account_id, u.name, COUNT(f.txn_id) AS fraud_count
-FROM account a
-JOIN users u ON a.user_id = u.user_id
-JOIN transactions t ON a.account_id = t.sender_account_id
-JOIN fraud_log f ON t.txn_id = f.txn_id
-WHERE a.account_status = 'BLOCKED'
-GROUP BY a.account_id, u.name
-HAVING COUNT(f.txn_id) > 1;
-
--- Rank users based on total transaction amount (Top spenders)
+-- 1. Rank users based on total transaction amount (Top spenders)
 SELECT u.name, SUM(t.amount) AS total_amount,
 DENSE_RANK() OVER (ORDER BY SUM(t.amount) DESC) AS rank
 FROM users u
@@ -391,21 +408,27 @@ JOIN account a ON u.user_id = a.user_id
 JOIN transactions t ON a.account_id = t.sender_account_id
 GROUP BY u.name;
 
--- Detect sudden spike in transaction amount (Fraud pattern)
+--------------------------------------------------
+
+-- 2. Detect sudden spike in transaction amount (Fraud pattern)
 SELECT *
 FROM (
   SELECT txn_id, sender_account_id, amount,
   LAG(amount) OVER (PARTITION BY sender_account_id ORDER BY txn_time) prev_amt
   FROM transactions
 )
-WHERE amount > 2 * prev_amt
+WHERE amount > 2 * prev_amt;
 
--- Running total of transactions per account (Balance flow analysis)
+--------------------------------------------------
+
+-- 3. Running total of transactions per account (Balance flow analysis)
 SELECT sender_account_id, txn_time, amount,
 SUM(amount) OVER (PARTITION BY sender_account_id ORDER BY txn_time) running_total
 FROM transactions;
 
--- Fraud contribution percentage per user
+--------------------------------------------------
+
+-- 4. Fraud contribution percentage per user
 SELECT u.name, SUM(t.amount) AS fraud_amt,
 ROUND(100 * SUM(t.amount) / (SELECT SUM(amount) FROM transactions),2) AS percentage
 FROM users u
@@ -414,7 +437,9 @@ JOIN transactions t ON a.account_id = t.sender_account_id
 JOIN fraud_log f ON t.txn_id = f.txn_id
 GROUP BY u.name;
 
--- Top 3 highest transactions for each payment method
+--------------------------------------------------
+
+-- 5. Top 3 highest transactions for each payment method
 SELECT * FROM (
 SELECT t.*, pm.method_type,
 ROW_NUMBER() OVER (PARTITION BY pm.method_type ORDER BY amount DESC) rn
@@ -422,7 +447,9 @@ FROM transactions t
 JOIN payment_method pm ON t.payment_id = pm.payment_id
 ) WHERE rn <= 3;
 
--- Transactions greater than user's own average transaction
+--------------------------------------------------
+
+-- 6. Transactions greater than user's own average transaction
 SELECT * FROM transactions t
 WHERE amount > (
 SELECT AVG(amount)
@@ -430,14 +457,18 @@ FROM transactions
 WHERE sender_account_id = t.sender_account_id
 );
 
--- Identify highly active accounts in last 2 days
+--------------------------------------------------
+
+-- 7. Identify highly active accounts in last 2 days
 SELECT sender_account_id, COUNT(*) txn_count
 FROM transactions
 WHERE txn_time > SYSDATE - 2
 GROUP BY sender_account_id
 HAVING COUNT(*) > 3;
 
---  Fraud ratio per payment method
+--------------------------------------------------
+
+-- 8. Fraud ratio per payment method
 SELECT pm.method_type,
 ROUND(COUNT(f.txn_id) * 100.0 / COUNT(t.txn_id), 2) AS fraud_ratio
 FROM transactions t
@@ -445,28 +476,35 @@ LEFT JOIN fraud_log f ON t.txn_id = f.txn_id
 JOIN payment_method pm ON t.payment_id = pm.payment_id
 GROUP BY pm.method_type;
 
---  Detect circular transactions (A → B → A)
+--------------------------------------------------
+
+-- 9. Detect circular transactions (A → B → A)
 SELECT t1.sender_account_id, t1.receiver_account_id
 FROM transactions t1
 JOIN transactions t2
 ON t1.sender_account_id = t2.receiver_account_id
 AND t1.receiver_account_id = t2.sender_account_id;
 
+--------------------------------------------------
 
--- Accounts consistently making high-value transactions
+-- 10. Accounts consistently making high-value transactions
 SELECT sender_account_id
 FROM transactions
 GROUP BY sender_account_id
 HAVING MIN(amount) > 50000;
 
---First and last transaction of each account
+--------------------------------------------------
+
+-- 11. First and last transaction of each account
 SELECT sender_account_id,
 MIN(txn_time) first_txn,
 MAX(txn_time) last_txn
 FROM transactions
 GROUP BY sender_account_id;
 
---Accounts with multiple frauds in last 24 hours
+--------------------------------------------------
+
+-- 12. Accounts with multiple frauds in last 24 hours
 SELECT sender_account_id, COUNT(*) frauds
 FROM transactions t
 JOIN fraud_log f ON t.txn_id = f.txn_id
@@ -474,7 +512,9 @@ WHERE txn_time >= SYSDATE - 1
 GROUP BY sender_account_id
 HAVING COUNT(*) > 2;
 
---Users whose transaction volume exceeds account balance
+--------------------------------------------------
+
+-- 13. Users whose transaction volume exceeds account balance
 SELECT u.name, a.balance, SUM(t.amount) total_txn
 FROM users u
 JOIN account a ON u.user_id = a.user_id
@@ -482,11 +522,15 @@ JOIN transactions t ON a.account_id = t.sender_account_id
 GROUP BY u.name, a.balance
 HAVING SUM(t.amount) > a.balance;
 
---Users with single high-value transaction
+--------------------------------------------------
+
+-- 14. Users with single high-value transaction
 SELECT sender_account_id
 FROM transactions
 GROUP BY sender_account_id
 HAVING COUNT(*) = 1 AND MAX(amount) > 100000;
+
+--------------------------------------------------
 
 -- 15. Most risky sender-receiver pair (max fraud count)
 SELECT sender_account_id, receiver_account_id, COUNT(*) frauds
@@ -495,12 +539,16 @@ JOIN fraud_log f ON t.txn_id = f.txn_id
 GROUP BY sender_account_id, receiver_account_id
 ORDER BY frauds DESC FETCH FIRST 1 ROW ONLY;
 
--- Percentile ranking of transactions
+--------------------------------------------------
+
+-- 16. Percentile ranking of transactions
 SELECT txn_id, amount,
 PERCENT_RANK() OVER (ORDER BY amount) pr
 FROM transactions;
 
---Users whose fraud amount exceeds normal transaction amount
+--------------------------------------------------
+
+-- 17. Users whose fraud amount exceeds normal transaction amount
 SELECT u.name
 FROM users u
 JOIN account a ON u.user_id = a.user_id
@@ -510,7 +558,9 @@ GROUP BY u.name
 HAVING SUM(CASE WHEN f.txn_id IS NOT NULL THEN amount ELSE 0 END) >
 SUM(CASE WHEN f.txn_id IS NULL THEN amount ELSE 0 END);
 
--- Detect back-to-back transactions within 1 hour
+--------------------------------------------------
+
+-- 18. Detect back-to-back transactions within 1 hour
 SELECT *
 FROM (
   SELECT txn_id, sender_account_id, txn_time,
@@ -519,19 +569,25 @@ FROM (
 )
 WHERE gap < 1/24;
 
---  Daily fraud trend analysis
+--------------------------------------------------
+
+-- 19. Daily fraud trend analysis
 SELECT TRUNC(fraud_time), COUNT(*)
 FROM fraud_log
 GROUP BY TRUNC(fraud_time)
 ORDER BY TRUNC(fraud_time);
 
--- Fraud reason distribution percentage
+--------------------------------------------------
+
+-- 20. Fraud reason distribution percentage
 SELECT reason,
 COUNT(*) * 100 / (SELECT COUNT(*) FROM fraud_log) AS fraudPercentage
 FROM fraud_log
 GROUP BY reason;
 
--- Users using multiple payment methods and involved in fraud
+--------------------------------------------------
+
+-- 21. Users using multiple payment methods and involved in fraud
 SELECT user_id
 FROM payment_method
 GROUP BY user_id
@@ -543,37 +599,49 @@ JOIN transactions t ON a.account_id = t.sender_account_id
 JOIN fraud_log f ON t.txn_id = f.txn_id
 );
 
---  Rolling average of last 3 transactions
+--------------------------------------------------
+
+-- 22. Rolling average of last 3 transactions
 SELECT txn_id, amount,
 AVG(amount) OVER (ORDER BY txn_time ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)
 FROM transactions;
 
--- Detect outlier transactions using statistical method
+--------------------------------------------------
+
+-- 23. Detect outlier transactions using statistical method
 SELECT txn_id, amount
 FROM transactions
 WHERE amount > (
 SELECT AVG(amount) + 2*STDDEV(amount) FROM transactions
 );
 
---  Accounts sending to many unique receivers
+--------------------------------------------------
+
+-- 24. Accounts sending to many unique receivers
 SELECT sender_account_id
 FROM transactions
 GROUP BY sender_account_id
 HAVING COUNT(DISTINCT receiver_account_id) > 5;
 
--- Fraud density per account
+--------------------------------------------------
+
+-- 25. Fraud density per account
 SELECT sender_account_id,
 ROUND(COUNT(f.txn_id) / COUNT(*)) AS fraud_density
 FROM transactions t
 LEFT JOIN fraud_log f ON t.txn_id = f.txn_id
 GROUP BY sender_account_id;
 
---  Longest time gap between transactions per account
+--------------------------------------------------
+
+-- 26. Longest time gap between transactions per account
 SELECT sender_account_id,
 MAX(txn_time - LAG(txn_time) OVER (PARTITION BY sender_account_id ORDER BY txn_time))
 FROM transactions;
 
--- Accounts showing increasing transaction trend
+--------------------------------------------------
+
+-- 27. Accounts showing increasing transaction trend
 SELECT sender_account_id
 FROM (
 SELECT sender_account_id, amount,
@@ -583,20 +651,26 @@ FROM transactions
 WHERE amount > prev
 GROUP BY sender_account_id;
 
--- Peak transaction hour
+--------------------------------------------------
+
+-- 28. Peak transaction hour
 SELECT EXTRACT(HOUR FROM txn_time) hr, COUNT(*)
 FROM transactions
 GROUP BY EXTRACT(HOUR FROM txn_time)
 ORDER BY COUNT(*) DESC FETCH FIRST 1 ROW ONLY;
 
---  Top 5% highest transactions
+--------------------------------------------------
+
+-- 29. Top 5% highest transactions
 SELECT * FROM (
 SELECT t.*, NTILE(20) OVER (ORDER BY amount DESC) bucket
 FROM transactions t
 )
 WHERE bucket = 1;
 
---  Fraud score calculation per user (composite risk metric)
+--------------------------------------------------
+
+-- 30. Fraud score calculation per user (composite risk metric)
 SELECT u.name,
 COUNT(f.txn_id)*2 + SUM(t.amount)/100000 AS fraud_score
 FROM users u
@@ -606,7 +680,9 @@ LEFT JOIN fraud_log f ON t.txn_id = f.txn_id
 GROUP BY u.name
 ORDER BY fraud_score DESC;
 
--- Classify transactions into risk categories
+--------------------------------------------------
+
+-- 31. Classify transactions into risk categories
 SELECT txn_id, amount,
 CASE 
   WHEN amount > 1000000 THEN 'HIGH'
@@ -615,7 +691,9 @@ CASE
 END risk_level
 FROM transactions;
 
---  Find users with continuous transactions (3 in a row)
+--------------------------------------------------
+
+-- 32. Find users with continuous transactions (3 in a row)
 SELECT sender_account_id
 FROM (
 SELECT sender_account_id,
@@ -625,7 +703,9 @@ FROM transactions
 GROUP BY sender_account_id
 HAVING COUNT(*) >= 3;
 
---  CTE: Total debit vs credit per account
+--------------------------------------------------
+
+-- 33. CTE: Total debit vs credit per account
 WITH txn_flow AS (
 SELECT sender_account_id acc, SUM(amount) debit, 0 credit FROM transactions GROUP BY sender_account_id
 UNION ALL
@@ -635,7 +715,9 @@ SELECT acc, SUM(debit) total_debit, SUM(credit) total_credit
 FROM txn_flow
 GROUP BY acc;
 
---  Detect accounts with zero balance but high transactions
+--------------------------------------------------
+
+-- 34. Detect accounts with zero balance but high transactions
 SELECT a.account_id
 FROM account a
 JOIN transactions t ON a.account_id = t.sender_account_id
@@ -643,7 +725,9 @@ WHERE a.balance = 0
 GROUP BY a.account_id
 HAVING SUM(t.amount) > 100000;
 
--- Users whose last transaction was fraud
+--------------------------------------------------
+
+-- 35. Users whose last transaction was fraud
 SELECT sender_account_id
 FROM (
 SELECT t.*, ROW_NUMBER() OVER (PARTITION BY sender_account_id ORDER BY txn_time DESC) rn
@@ -652,7 +736,9 @@ FROM transactions t
 WHERE rn = 1
 AND txn_id IN (SELECT txn_id FROM fraud_log);
 
---Accounts with decreasing transaction pattern
+--------------------------------------------------
+
+-- 36. Accounts with decreasing transaction pattern
 SELECT sender_account_id
 FROM (
 SELECT sender_account_id, amount,
@@ -662,19 +748,25 @@ FROM transactions
 WHERE amount < prev
 GROUP BY sender_account_id;
 
--- Find duplicate transaction amounts for same user
+--------------------------------------------------
+
+-- 37. Find duplicate transaction amounts for same user
 SELECT sender_account_id, amount, COUNT(*)
 FROM transactions
 GROUP BY sender_account_id, amount
 HAVING COUNT(*) > 1;
 
--- Highest fraud amount per user
+--------------------------------------------------
+
+-- 38. Highest fraud amount per user
 SELECT sender_account_id, MAX(amount)
 FROM transactions
 WHERE txn_id IN (SELECT txn_id FROM fraud_log)
 GROUP BY sender_account_id;
 
---Compare weekday vs weekend transactions
+--------------------------------------------------
+
+-- 39. Compare weekday vs weekend transactions
 SELECT CASE 
 WHEN TO_CHAR(txn_time,'DY') IN ('SAT','SUN') THEN 'WEEKEND'
 ELSE 'WEEKDAY' END type,
@@ -684,7 +776,9 @@ GROUP BY CASE
 WHEN TO_CHAR(txn_time,'DY') IN ('SAT','SUN') THEN 'WEEKEND'
 ELSE 'WEEKDAY' END;
 
--- Detect accounts interacting with many fraud users
+--------------------------------------------------
+
+-- 40. Detect accounts interacting with many fraud users
 SELECT sender_account_id
 FROM transactions
 WHERE receiver_account_id IN (
@@ -694,11 +788,15 @@ JOIN fraud_log f ON t.txn_id = f.txn_id
 )
 GROUP BY sender_account_id;
 
---  Median transaction amount
+--------------------------------------------------
+
+-- 41. Median transaction amount
 SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY amount)
 FROM transactions;
 
--- Identify users with no fraud but high volume
+--------------------------------------------------
+
+-- 42. Identify users with no fraud but high volume
 SELECT sender_account_id
 FROM transactions
 GROUP BY sender_account_id
@@ -709,25 +807,33 @@ FROM transactions t
 JOIN fraud_log f ON t.txn_id = f.txn_id
 );
 
---- Transactions close to max value (top 10%)
+--------------------------------------------------
+
+-- 43. Transactions close to max value (top 10%)
 SELECT *
 FROM transactions
 WHERE amount > 0.9 * (SELECT MAX(amount) FROM transactions);
 
---  Find accounts sending same amount repeatedly in short time
+--------------------------------------------------
+
+-- 44. Find accounts sending same amount repeatedly in short time
 SELECT sender_account_id, amount
 FROM transactions
 GROUP BY sender_account_id, amount
 HAVING COUNT(*) > 3;
 
---  Accounts involved in both sending and receiving fraud
+--------------------------------------------------
+
+-- 45. Accounts involved in both sending and receiving fraud
 SELECT DISTINCT t1.sender_account_id
 FROM transactions t1
 JOIN fraud_log f1 ON t1.txn_id = f1.txn_id
 JOIN transactions t2 ON t1.sender_account_id = t2.receiver_account_id
 JOIN fraud_log f2 ON t2.txn_id = f2.txn_id;
 
--- Detect accounts with increasing frequency of transactions
+--------------------------------------------------
+
+-- 46. Detect accounts with increasing frequency of transactions
 SELECT sender_account_id
 FROM transactions
 GROUP BY sender_account_id
@@ -737,14 +843,18 @@ FROM (
 SELECT COUNT(*) cnt FROM transactions GROUP BY sender_account_id
 ));
 
---  Compare average fraud vs normal transaction amount
+--------------------------------------------------
+
+-- 47. Compare average fraud vs normal transaction amount
 SELECT 
 AVG(CASE WHEN f.txn_id IS NOT NULL THEN amount END) fraud_avg,
 AVG(CASE WHEN f.txn_id IS NULL THEN amount END) normal_avg
 FROM transactions t
 LEFT JOIN fraud_log f ON t.txn_id = f.txn_id;
 
--- Accounts with maximum outgoing minus incoming difference
+--------------------------------------------------
+
+-- 48. Accounts with maximum outgoing minus incoming difference
 WITH flow AS (
 SELECT sender_account_id acc, SUM(amount) debit, 0 credit FROM transactions GROUP BY sender_account_id
 UNION ALL
@@ -755,14 +865,18 @@ FROM flow
 GROUP BY acc
 ORDER BY net_outflow DESC;
 
--- Detect suspicious micro-transactions (many small transfers)
+--------------------------------------------------
+
+-- 49. Detect suspicious micro-transactions (many small transfers)
 SELECT sender_account_id
 FROM transactions
 WHERE amount < 100
 GROUP BY sender_account_id
 HAVING COUNT(*) > 5;
 
--- Final risk scoring with multi-factor logic
+--------------------------------------------------
+
+-- 50. Final risk scoring with multi-factor logic
 SELECT sender_account_id,
 COUNT(f.txn_id)*3 +
 SUM(CASE WHEN amount > 100000 THEN 2 ELSE 1 END) AS risk_score
@@ -770,6 +884,16 @@ FROM transactions t
 LEFT JOIN fraud_log f ON t.txn_id = f.txn_id
 GROUP BY sender_account_id
 ORDER BY risk_score DESC;
+
+-- 51. Account blocked due to cursor
+SELECT a.account_id, u.name, COUNT(f.txn_id) AS fraud_count
+FROM account a
+JOIN users u ON a.user_id = u.user_id
+JOIN transactions t ON a.account_id = t.sender_account_id
+JOIN fraud_log f ON t.txn_id = f.txn_id
+WHERE a.account_status = 'BLOCKED'
+GROUP BY a.account_id, u.name
+HAVING COUNT(f.txn_id) > 1;
 
 --------------------------------------------------
 -- END OF PROJECT 
