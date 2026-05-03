@@ -4,7 +4,7 @@
 
 -- 1. FULL DATABASE CLEANUP SCRIPT
 
-SET DEFINE OFF;
+SET DEFINE OFF; -- Don’t treat & as input variable, just treat it as normal text
 
 BEGIN
    -- Drop Trigger
