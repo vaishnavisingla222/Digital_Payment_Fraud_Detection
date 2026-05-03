@@ -157,5 +157,8 @@ This project demonstrates how relational database systems and SQL can be used to
 * Advanced anomaly detection techniques
 
 ---
+## 👩‍💻 Author
+Vaishnavi Singla, Siya Garg, Nehmat Kaushal
+---
 
 💡 *This project highlights practical implementation of DBMS concepts such as normalization, ACID properties, triggers, and transaction management in a real-world financial use case.*
