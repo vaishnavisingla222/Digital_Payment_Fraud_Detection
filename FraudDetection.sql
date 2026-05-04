@@ -389,29 +389,46 @@ WHERE a.account_status = 'BLOCKED'
 GROUP BY a.account_id, u.name
 HAVING COUNT(f.txn_id) > 1;
 
--- Rank users based on total transaction amount (Top spenders)
-SELECT u.name, SUM(t.amount) AS total_amount,
-DENSE_RANK() OVER (ORDER BY SUM(t.amount) DESC) AS rank
+--Final risk scoring with multi-factor logic
+SELECT sender_account_id,
+COUNT(f.txn_id)*3 +
+SUM(CASE WHEN amount > 100000 THEN 2 ELSE 1 END) AS risk_score
+FROM transactions t
+LEFT JOIN fraud_log f ON t.txn_id = f.txn_id
+GROUP BY sender_account_id
+ORDER BY risk_score DESC;
+
+-- Fraud by Payment Method
+SELECT pm.method_type, COUNT(*)
+FROM fraud_log f
+JOIN transactions t ON f.txn_id = t.txn_id
+JOIN payment_method pm ON t.payment_id = pm.payment_id
+GROUP BY pm.method_type;
+
+----Detect suspicious micro-transactions (many small transfers)
+SELECT sender_account_id
+FROM transactions
+WHERE amount < 100
+GROUP BY sender_account_id
+HAVING COUNT(*) > 5;
+
+-- Sender & Receiver Details
+SELECT t.txn_id, u1.name AS sender, u2.name AS receiver, t.amount
+FROM transactions t
+JOIN account a1 ON t.sender_account_id = a1.account_id
+JOIN users u1 ON a1.user_id = u1.user_id
+JOIN account a2 ON t.receiver_account_id = a2.account_id
+JOIN users u2 ON a2.user_id = u2.user_id;
+
+
+-- Users with No Transactions
+SELECT u.name
 FROM users u
-JOIN account a ON u.user_id = a.user_id
-JOIN transactions t ON a.account_id = t.sender_account_id
-GROUP BY u.name;
-
-
--- Detect sudden spike in transaction amount (Fraud pattern)
-SELECT *
-FROM (
-  SELECT txn_id, sender_account_id, amount,
-  LAG(amount) OVER (PARTITION BY sender_account_id ORDER BY txn_time) prev_amt
-  FROM transactions
-)
-WHERE amount > 2 * prev_amt;
-
-
--- Running total of transactions per account (Balance flow analysis)
-SELECT sender_account_id, txn_time, amount,
-SUM(amount) OVER (PARTITION BY sender_account_id ORDER BY txn_time) running_total
-FROM transactions;
+WHERE NOT EXISTS (
+    SELECT 1 FROM account a
+    JOIN transactions t ON a.account_id = t.sender_account_id
+    WHERE a.user_id = u.user_id
+);
 
 
 -- Fraud contribution percentage per user
@@ -422,15 +439,6 @@ JOIN account a ON u.user_id = a.user_id
 JOIN transactions t ON a.account_id = t.sender_account_id
 JOIN fraud_log f ON t.txn_id = f.txn_id
 GROUP BY u.name;
-
-
--- Top 3 highest transactions for each payment method
-SELECT * FROM (
-SELECT t.*, pm.method_type,
-ROW_NUMBER() OVER (PARTITION BY pm.method_type ORDER BY amount DESC) rn
-FROM transactions t
-JOIN payment_method pm ON t.payment_id = pm.payment_id
-) WHERE rn <= 3;
 
 
 -- Transactions greater than user's own average transaction
@@ -515,10 +523,7 @@ GROUP BY sender_account_id, receiver_account_id
 ORDER BY frauds DESC FETCH FIRST 1 ROW ONLY;
 
 
--- Percentile ranking of transactions
-SELECT txn_id, amount,
-PERCENT_RANK() OVER (ORDER BY amount) pr
-FROM transactions;
+
 
 
 -- Users whose fraud amount exceeds normal transaction amount
@@ -554,6 +559,7 @@ COUNT(*) * 100 / (SELECT COUNT(*) FROM fraud_log) AS fraudPercentage
 FROM fraud_log
 GROUP BY reason;
 
+
 --  Users using multiple payment methods and involved in fraud
 SELECT user_id
 FROM payment_method
@@ -565,6 +571,27 @@ FROM account a
 JOIN transactions t ON a.account_id = t.sender_account_id
 JOIN fraud_log f ON t.txn_id = f.txn_id
 );
+
+---Detect accounts with increasing frequency of transactions
+SELECT sender_account_id
+FROM transactions
+GROUP BY sender_account_id
+HAVING COUNT(*) > (
+SELECT AVG(cnt)
+FROM (
+SELECT COUNT(*) cnt FROM transactions GROUP BY sender_account_id
+));
+
+
+-- Total debit vs credit per account
+WITH txn_flow AS (
+SELECT sender_account_id acc, SUM(amount) debit, 0 credit FROM transactions GROUP BY sender_account_id
+UNION ALL
+SELECT receiver_account_id, 0, SUM(amount) FROM transactions GROUP BY receiver_account_id
+)
+SELECT acc, SUM(debit) total_debit, SUM(credit) total_credit
+FROM txn_flow
+GROUP BY acc;
 
 
 -- Rolling average of last 3 transactions
@@ -656,17 +683,6 @@ FROM transactions
 )
 GROUP BY sender_account_id
 HAVING COUNT(*) >= 3;
-
-
--- Total debit vs credit per account
-WITH txn_flow AS (
-SELECT sender_account_id acc, SUM(amount) debit, 0 credit FROM transactions GROUP BY sender_account_id
-UNION ALL
-SELECT receiver_account_id, 0, SUM(amount) FROM transactions GROUP BY receiver_account_id
-)
-SELECT acc, SUM(debit) total_debit, SUM(credit) total_credit
-FROM txn_flow
-GROUP BY acc;
 
 
 -- Detect accounts with zero balance but high transactions
@@ -763,15 +779,6 @@ JOIN fraud_log f1 ON t1.txn_id = f1.txn_id
 JOIN transactions t2 ON t1.sender_account_id = t2.receiver_account_id
 JOIN fraud_log f2 ON t2.txn_id = f2.txn_id;
 
----Detect accounts with increasing frequency of transactions
-SELECT sender_account_id
-FROM transactions
-GROUP BY sender_account_id
-HAVING COUNT(*) > (
-SELECT AVG(cnt)
-FROM (
-SELECT COUNT(*) cnt FROM transactions GROUP BY sender_account_id
-));
 
 ---Compare average fraud vs normal transaction amount
 SELECT 
@@ -791,21 +798,20 @@ FROM flow
 GROUP BY acc
 ORDER BY net_outflow DESC;
 
-----Detect suspicious micro-transactions (many small transfers)
-SELECT sender_account_id
-FROM transactions
-WHERE amount < 100
-GROUP BY sender_account_id
-HAVING COUNT(*) > 5;
+-- Percentile ranking of transactions
+SELECT txn_id, amount,
+PERCENT_RANK() OVER (ORDER BY amount) pr
+FROM transactions;
 
---Final risk scoring with multi-factor logic
-SELECT sender_account_id,
-COUNT(f.txn_id)*3 +
-SUM(CASE WHEN amount > 100000 THEN 2 ELSE 1 END) AS risk_score
+
+-- Top 3 highest transactions for each payment method
+SELECT * FROM (
+SELECT t.*, pm.method_type,
+ROW_NUMBER() OVER (PARTITION BY pm.method_type ORDER BY amount DESC) rn
 FROM transactions t
-LEFT JOIN fraud_log f ON t.txn_id = f.txn_id
-GROUP BY sender_account_id
-ORDER BY risk_score DESC;
+JOIN payment_method pm ON t.payment_id = pm.payment_id
+) WHERE rn <= 3;
+
 
 --------------------------------------------------
 -- END OF PROJECT 
