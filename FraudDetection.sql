@@ -389,14 +389,6 @@ WHERE a.account_status = 'BLOCKED'
 GROUP BY a.account_id, u.name
 HAVING COUNT(f.txn_id) > 1;
 
---Final risk scoring with multi-factor logic
-SELECT sender_account_id,
-COUNT(f.txn_id)*3 +
-SUM(CASE WHEN amount > 100000 THEN 2 ELSE 1 END) AS risk_score
-FROM transactions t
-LEFT JOIN fraud_log f ON t.txn_id = f.txn_id
-GROUP BY sender_account_id
-ORDER BY risk_score DESC;
 
 -- Fraud by Payment Method
 SELECT pm.method_type, COUNT(*)
@@ -412,13 +404,13 @@ WHERE amount < 100
 GROUP BY sender_account_id
 HAVING COUNT(*) > 5;
 
--- Sender & Receiver Details
-SELECT t.txn_id, u1.name AS sender, u2.name AS receiver, t.amount
+
+--Most risky sender-receiver pair (max fraud count)
+SELECT sender_account_id, receiver_account_id, COUNT(*) frauds
 FROM transactions t
-JOIN account a1 ON t.sender_account_id = a1.account_id
-JOIN users u1 ON a1.user_id = u1.user_id
-JOIN account a2 ON t.receiver_account_id = a2.account_id
-JOIN users u2 ON a2.user_id = u2.user_id;
+JOIN fraud_log f ON t.txn_id = f.txn_id
+GROUP BY sender_account_id, receiver_account_id
+ORDER BY frauds DESC FETCH FIRST 1 ROW ONLY;
 
 
 -- Users with No Transactions
@@ -474,6 +466,22 @@ JOIN transactions t2
 ON t1.sender_account_id = t2.receiver_account_id
 AND t1.receiver_account_id = t2.sender_account_id;
 
+--Final risk scoring with multi-factor logic
+SELECT sender_account_id,
+COUNT(f.txn_id)*3 +
+SUM(CASE WHEN amount > 100000 THEN 2 ELSE 1 END) AS risk_score
+FROM transactions t
+LEFT JOIN fraud_log f ON t.txn_id = f.txn_id
+GROUP BY sender_account_id
+ORDER BY risk_score DESC;
+
+-- Sender & Receiver Details
+SELECT t.txn_id, u1.name AS sender, u2.name AS receiver, t.amount
+FROM transactions t
+JOIN account a1 ON t.sender_account_id = a1.account_id
+JOIN users u1 ON a1.user_id = u1.user_id
+JOIN account a2 ON t.receiver_account_id = a2.account_id
+JOIN users u2 ON a2.user_id = u2.user_id;
 
 -- Accounts consistently making high-value transactions
 SELECT sender_account_id
@@ -513,16 +521,6 @@ SELECT sender_account_id
 FROM transactions
 GROUP BY sender_account_id
 HAVING COUNT(*) = 1 AND MAX(amount) > 100000;
-
-
---Most risky sender-receiver pair (max fraud count)
-SELECT sender_account_id, receiver_account_id, COUNT(*) frauds
-FROM transactions t
-JOIN fraud_log f ON t.txn_id = f.txn_id
-GROUP BY sender_account_id, receiver_account_id
-ORDER BY frauds DESC FETCH FIRST 1 ROW ONLY;
-
-
 
 
 
